@@ -1,14 +1,15 @@
 import {
   BadRequestException,
+  HttpStatus,
   Injectable,
   Logger,
-  NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaClient } from '@prisma/client';
 import { PaginationDto } from 'src/common';
+import { RpcException } from '@nestjs/microservices';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService extends PrismaClient implements OnModuleInit {
@@ -26,11 +27,11 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
   }
 
   async findAll({ page, limit }: PaginationDto) {
-    const records = await this.product.count();
-    const lastPage = Math.ceil(records / limit);
+    const totalItems = await this.product.count();
+    const lastPage = Math.ceil(totalItems / limit);
     return {
       meta: {
-        total: records,
+        totalItems,
         currentPage: page,
         lastPage,
       },
@@ -47,7 +48,11 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
       where: { id, available: true },
     });
     if (!product) {
-      throw new NotFoundException(`Resource not found`);
+      throw new RpcException({
+        message: `Resource not found`,
+        statusCode: HttpStatus.NOT_FOUND,
+        error: 'Not found',
+      });
     }
     return product;
   }
@@ -80,5 +85,26 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
       data: { available: false },
     });
     return product;
+  }
+
+  async validateProducts(ids: number[]) {
+    const productsIds = [...new Set(ids)];
+    const products = await this.product.findMany({
+      where: {
+        id: {
+          in: productsIds,
+        },
+      },
+    });
+
+    if (products.length !== productsIds.length) {
+      throw new RpcException({
+        message: `Some resources were not found`,
+        statusCode: HttpStatus.NOT_FOUND,
+        error: 'Not found',
+      });
+    }
+
+    return products;
   }
 }

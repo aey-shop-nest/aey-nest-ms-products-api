@@ -38,4 +38,9 @@ export class ProductsController {
   softDelete(@Payload('id', ParseIntPipe) id: number) {
     return this.productsService.softDelete(id);
   }
+
+  @MessagePattern({ cmd: 'validate_products' })
+  validateProduct(@Payload('ids') ids: number[]) {
+    return this.productsService.validateProducts(ids);
+  }
 }
